@@ -553,8 +553,10 @@ def chunk(filename, binary=None, from_page=0, to_page=MAXIMUM_TASK_PAGE_NUMBER, 
             # therefore be the original column names — not the pinyin
             # form (`py_clmns[i].lower()`), which silently breaks
             # non-ASCII columns because the LLM is told `xing_ming` but
-            # `chunk_data` is keyed by `姓名`.
-            field_map = {str(clmns[i]).replace("_", " "): str(clmns[i]).replace("_", " ") for i in stored_indices}
+            # `chunk_data` is keyed by `姓名`. Underscore-to-space on the
+            # value side only — keys must stay byte-identical with
+            # `chunk_data` so SQL extraction actually finds the column.
+            field_map = {str(clmns[i]): str(clmns[i]).replace("_", " ") for i in stored_indices}
         else:
             field_map = {clmns_map[i][0]: clmns_map[i][1] for i in stored_indices}
         logging.debug(f"Field map (sheet): {field_map}")

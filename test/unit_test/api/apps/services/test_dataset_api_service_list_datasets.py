@@ -371,6 +371,11 @@ def test_list_datasets_with_include_parsing_status_missing_kb_gets_empty_dict(mo
 
     assert ok is True
     by_id = {r["id"]: r for r in payload["data"]}
-    assert by_id["kb-a"]["parsing_status"]["unstart_count"] == 1
-    assert by_id["kb-b"]["parsing_status"] == {}
+    # After the fix for #17595, counts spread directly onto the dataset
+    # entry (no synthetic `parsing_status` key). A kb missing from the
+    # helper output has no counts attached at all.
+    assert "parsing_status" not in by_id["kb-a"]
+    assert "parsing_status" not in by_id["kb-b"]
+    assert by_id["kb-a"]["unstart_count"] == 1
+    assert "unstart_count" not in by_id["kb-b"]
     parsing_status_mock.assert_called_once()
