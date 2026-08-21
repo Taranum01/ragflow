@@ -18,17 +18,25 @@ import json
 import logging
 import os
 import re
+from collections.abc import AsyncGenerator
 from copy import deepcopy
-from typing import Any, AsyncGenerator
-import json_repair
 from functools import partial
-from common.constants import LLMType
+from typing import Any
+
+import json_repair
+
+from agent.component.base import ComponentBase, ComponentParamBase
+from api.db.joint_services.tenant_model_service import (
+    get_model_config_from_provider_instance,
+    get_model_type_by_name,
+    resolve_model_config,
+    resolve_model_type,
+)
 from api.db.services.dialog_service import _stream_with_think_delta
 from api.db.services.llm_service import LLMBundle
-from api.db.joint_services.tenant_model_service import resolve_model_config, resolve_model_type
-from agent.component.base import ComponentBase, ComponentParamBase
 from common.connection_utils import timeout
-from rag.prompts.generator import tool_call_summary, message_fit_in, citation_prompt, structured_output_prompt
+from common.constants import LLMType
+from rag.prompts.generator import citation_prompt, message_fit_in, structured_output_prompt, tool_call_summary
 
 
 class LLMParam(ComponentParamBase):
@@ -375,7 +383,7 @@ class LLM(ComponentBase):
             return await self.chat_mdl.async_chat(msg[0]["content"], msg[1:], self._param.gen_conf(), **kwargs)
         return await self.chat_mdl.async_chat(msg[0]["content"], msg[1:], self._param.gen_conf(), images=self.imgs, **kwargs)
 
-    async def _generate_streamly(self, msg: list[dict], **kwargs) -> AsyncGenerator[str, None]:
+    async def _generate_streamly(self, msg: list[dict], **kwargs) -> AsyncGenerator[str]:
         stream_kwargs = {"images": self.imgs} if self.imgs else {}
         stream_kwargs.update(kwargs)
         stream = self.chat_mdl.async_chat_streamly_delta(msg[0]["content"], msg[1:], self._param.gen_conf(), **stream_kwargs)
