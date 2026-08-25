@@ -113,7 +113,6 @@ def init_default_admin():
 
 
 def add_tenant_for_admin(user_info: dict, role: str):
-
     tenant = {
         "id": user_info["id"],
         "name": user_info["nickname"] + "‘s Kingdom",
