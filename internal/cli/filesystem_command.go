@@ -160,16 +160,7 @@ func (c *CLI) executeFilesystemInner(input string) error {
 			c.printSkillSearchResults(result, c.Config.OutputFormat)
 			return nil
 		}
-		ceCmd = &filesystem.Command{
-			Type: filesystem.CommandSearch,
-			Path: searchPath,
-			Params: map[string]interface{}{
-				"query":     searchOpts.Query,
-				"top_k":     searchOpts.TopK,
-				"threshold": searchOpts.Threshold,
-				"dirs":      searchOpts.Dirs,
-			},
-		}
+		ceCmd = buildSearchCommand(searchOpts, searchPath)
 	case "cat":
 		if len(cmdArgs) == 0 {
 			return fmt.Errorf("cat requires a path argument")
@@ -538,10 +529,38 @@ func isBinaryContent(content []byte) bool {
 
 // SearchCommandOptions holds parsed search command options
 type SearchCommandOptions struct {
-	Query     string
-	TopK      int
+	Query string
+	TopK  int
+	// #19284: store the -n / --number (result limit) separately so
+	// ``SearchOptions.Limit`` can be set from the same field. ``TopK``
+	// is kept for the semantic-search / skills path, where the field
+	// stays semantically a "top-k".
+	limit     int
 	Threshold float64
 	Dirs      []string
+}
+
+// buildSearchCommand packages the search options into the “filesystem.Command“
+// payload that the engine consumes. #19284 keeps “limit“ and “TopK“ as
+// separate fields so “FileProvider.Search“ (consumes “Limit“) and the
+// skills-search / semantic-search path (consumes “TopK“) both receive
+// the user-supplied “-n“ count.
+//
+// Unexported — the full “executeFilesystemInner“ flow
+// is hard to exercise in isolation, but the command payload it sends
+// to the engine is a pure function of the parsed options + path.
+func buildSearchCommand(searchOpts *SearchCommandOptions, searchPath string) *filesystem.Command {
+	return &filesystem.Command{
+		Type: filesystem.CommandSearch,
+		Path: searchPath,
+		Params: map[string]interface{}{
+			"query":     searchOpts.Query,
+			"top_k":     searchOpts.TopK,
+			"limit":     searchOpts.limit,
+			"threshold": searchOpts.Threshold,
+			"dirs":      searchOpts.Dirs,
+		},
+	}
 }
 
 // ListCommandOptions holds parsed list command options
@@ -556,7 +575,12 @@ type ListCommandOptions struct {
 //	search -h|--help (shows help)
 func parseSearchCommandArgs(args []string) (*SearchCommandOptions, error) {
 	opts := &SearchCommandOptions{
-		TopK:      10,
+		TopK: 10,
+		// #19284: mirror the TopK default into limit so the no-flag
+		// ``search foo files`` invocation reaches ``FileProvider``
+		// with ``SearchOptions.Limit = 10`` instead of falling back
+		// to the library's default ``page_size=100``.
+		limit:     10,
 		Threshold: 0.2,
 		Dirs:      []string{},
 	}
@@ -575,16 +599,23 @@ func parseSearchCommandArgs(args []string) (*SearchCommandOptions, error) {
 	for i < len(args) {
 		arg := args[i]
 
-		// Handle -n flag for number of results
+		// Handle -n flag for number of results.
+		// #19284: write the parsed count into BOTH ``TopK`` and
+		// ``limit``. ``TopK`` keeps the existing semantic-search
+		// / skills meaning; ``limit`` is what ``FileProvider.Search``
+		// actually consumes, so the user-supplied ``-n`` now reaches
+		// the file-search ``listFilesByParentID`` call instead of
+		// falling back to the default ``page_size=100``.
 		if arg == "-n" || arg == "--number" {
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("missing value for %s flag", arg)
 			}
-			topK, err := strconv.Atoi(args[i+1])
+			n, err := strconv.Atoi(args[i+1])
 			if err != nil {
 				return nil, fmt.Errorf("invalid number value: %s", args[i+1])
 			}
-			opts.TopK = topK
+			opts.TopK = n
+			opts.limit = n
 			i += 2
 			continue
 		}
