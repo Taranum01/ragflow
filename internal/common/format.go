@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -40,11 +39,8 @@ func PtrString[T any](p *T) string {
 
 // IsCompositeModelName checks if a model name is a valid composite model name format model_name@instance_name@provider_name.
 func IsCompositeModelName(modelName string) bool {
-	parts := strings.Split(modelName, "@")
-	if len(parts) != 3 {
-		return false
-	}
-	return !slices.Contains(parts, "")
+	_, _, _, err := ExtractCompositeName(modelName)
+	return err == nil
 }
 
 func IsUUID(uuid string) bool {
@@ -79,14 +75,16 @@ func BaseModelName(modelName string) string {
 // Returns (modelName, instanceName, providerName, true) on success,
 // or ("", "", "", false) if the name is not a valid composite name.
 func ExtractCompositeName(modelName string) (string, string, string, error) {
-	parts := strings.Split(modelName, "@")
-	if len(parts) != 3 {
+	providerSeparator := strings.LastIndex(modelName, "@")
+	if providerSeparator <= 0 || providerSeparator == len(modelName)-1 {
 		return "", "", "", fmt.Errorf("invalid model name format")
 	}
-	if slices.Contains(parts, "") {
+	modelAndInstance := modelName[:providerSeparator]
+	instanceSeparator := strings.LastIndex(modelAndInstance, "@")
+	if instanceSeparator <= 0 || instanceSeparator == len(modelAndInstance)-1 {
 		return "", "", "", fmt.Errorf("invalid model name format")
 	}
-	return parts[0], parts[1], parts[2], nil
+	return modelAndInstance[:instanceSeparator], modelAndInstance[instanceSeparator+1:], modelName[providerSeparator+1:], nil
 }
 
 func EncodeToBase64(email string) string {

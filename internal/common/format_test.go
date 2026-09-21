@@ -97,3 +97,16 @@ func TestBaseModelName(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractCompositeNameRightAnchored(t *testing.T) {
+	model, instance, provider, err := ExtractCompositeName("text-embedding-nomic-embed-text-v1.5@q8_0@lmstudio@LM-Studio")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model != "text-embedding-nomic-embed-text-v1.5@q8_0" || instance != "lmstudio" || provider != "LM-Studio" {
+		t.Fatalf("unexpected parts: model=%q instance=%q provider=%q", model, instance, provider)
+	}
+	if !IsCompositeModelName("text-embedding-nomic-embed-text-v1.5@q8_0@lmstudio@LM-Studio") {
+		t.Fatal("composite model with @ in model name was rejected")
+	}
+}
